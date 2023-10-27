@@ -937,8 +937,54 @@ public class WifiServiceImpl extends BaseWifiService {
         mActiveModeWarden.wifiToggled(new WorkSource(Binder.getCallingUid(), packageName));
         mLastCallerInfoManager.put(LastCallerInfoManager.WIFI_ENABLED, Process.myTid(),
                 Binder.getCallingUid(), Binder.getCallingPid(), packageName, enable);
+        if (enable) {
+            mReconnectAfterEnable.mShouldReconnect = true;
+            mReconnectAfterEnable.mReconnectCnt = 3;
+            mWifiThreadRunner.postDelayed(mReconnectAfterEnable, 5000);
+            // mWifiThreadRunner.postDelayed(() -> reconnect(packageName), 5000);
+        }
         return true;
     }
+
+    private class ReconnectRunnable implements Runnable {
+        boolean mShouldReconnect = false;
+        int mReconnectCnt;
+
+        boolean isWifiConnected() {
+            boolean ret = false;
+            try {
+                WifiInfo wifiInfo = mWifiThreadRunner.call(
+                        () -> getClientModeManagerIfSecondaryCmmRequestedByCallerPresent(
+                                UserHandle.myUserId(), mContext.getOpPackageName())
+                                .syncRequestConnectionInfo(), new WifiInfo());
+                if (wifiInfo != null && wifiInfo.getWifiSsid() != null) {
+                    ret = true;
+                }
+            } finally {
+                return ret;
+            }
+        }
+
+        @Override
+        public void run() {
+            if (!mShouldReconnect || isWifiConnected()) {
+                mReconnectCnt = 0;
+                mShouldReconnect = false;
+                Log.d("chongyuzhao", "stop reconnect");
+                return;
+            }
+            mWifiThreadRunner.post(() -> {
+                mActiveModeWarden.getPrimaryClientModeManager().reconnect(new WorkSource(UserHandle.myUserId()));
+            });
+            if (mReconnectCnt > 0) mReconnectCnt--;
+            if (mReconnectCnt <= 0) mShouldReconnect = false;
+            if (mShouldReconnect) {
+                Log.d("chongyuzhao", "reconnect again");
+                mWifiThreadRunner.postDelayed(this, 5000);
+            }
+        }
+    }
+    ReconnectRunnable mReconnectAfterEnable = new ReconnectRunnable();
 
     @RequiresApi(Build.VERSION_CODES.S)
     @Override

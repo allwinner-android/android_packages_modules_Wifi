@@ -5991,20 +5991,8 @@ public class ClientModeImpl extends StateMachine implements ClientMode {
      */
     @Nullable
     private MacAddress retrieveFactoryMacAddressAndStoreIfNecessary() {
-        // Already present, just return.
-        String factoryMacAddressStr = mSettingsConfigStore.get(WIFI_STA_FACTORY_MAC_ADDRESS);
-        if (factoryMacAddressStr != null) return MacAddress.fromString(factoryMacAddressStr);
-
-        MacAddress factoryMacAddress = mWifiNative.getStaFactoryMacAddress(mInterfaceName);
-        if (factoryMacAddress == null) {
-            // the device may be running an older HAL (version < 1.3).
-            Log.w(TAG, "Failed to retrieve factory MAC address");
-            return null;
-        }
-        Log.i(TAG, "Factory MAC address retrieved and stored in config store: "
-                + factoryMacAddress);
-        mSettingsConfigStore.put(WIFI_STA_FACTORY_MAC_ADDRESS, factoryMacAddress.toString());
-        return factoryMacAddress;
+        // Get value from hal to update MAC address.
+        return mWifiNative.getStaFactoryMacAddress(mInterfaceName);
     }
 
     /**
